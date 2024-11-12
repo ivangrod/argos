@@ -4,8 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Polygon, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import axios from 'axios';
-import { nervionCoordinates } from "@/app/components/nervion-coordinates";
+import { nervionCoordinates } from "./nervion-coordinates";
 
 // Fix icon issues with leaflet
 L.Icon.Default.mergeOptions({
@@ -15,35 +14,32 @@ L.Icon.Default.mergeOptions({
 });
 
 const Map: React.FC = () => {
-    const [markerPosition, setMarkerPosition] = useState<L.LatLngExpression | null>(null);
-    const apiToken = process.env.NEXT_PUBLIC_API_TOKEN; // Extract the token from the environment variable
+    const [incidences, setIncidences] = useState([]);
 
     useEffect(() => {
-        if (!apiToken) {
-            console.error('API token is missing');
-            return;
-        }
 
         // Fetch data from the API
-        const apiUrl = `https://api.eu-central-1.aws.tinybird.co/v0/pipes/untitled_pipe_2106.json?incidence_id=8d1e1533-6071-4b10-9cda-b8429c1c7a68&token=${apiToken}`;
-        axios.get(apiUrl)
-            .then(response => {
-                // Assuming the response contains an object with "data" array
-                const data = response.data.data;
-                if (data.length > 0) {
-                    // Extract and parse the first object's incidence_coordinates
-                    const coordinates = JSON.parse(data[0].incidence_coordinates);
-                    setMarkerPosition([coordinates[0], coordinates[1]]); // Assuming the coordinates are in [lat, lon] format
-                }
+        fetch("http://localhost:3001/api/incidences")
+            .then((response) => response.json())
+            .then((data) => {
+                const incidencesWithCoordinates = data.map((incidence: { latitude: any; longitude: any; }) => ({
+                    ...incidence,
+                    coordinates: incidence.latitude && incidence.longitude
+                        ? [incidence.latitude, incidence.longitude]
+                        : null,
+                }));
+                setIncidences(incidencesWithCoordinates);
             })
             .catch(error => {
                 console.error('Error fetching data from API:', error);
             });
-    }, [apiToken]);
+    }, []);
 
     // Polygon coordinates delimiting the Seville town area
     const polygonCoords: L.LatLngExpression[] = nervionCoordinates;
 
+    // @ts-ignore
+    // @ts-ignore
     return (
         <MapContainer
             center={[37.38048238687146, -5.973369906729496]} // Center coordinate for Seville
@@ -54,13 +50,17 @@ const Map: React.FC = () => {
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
-            {markerPosition && (
-                <Marker position={markerPosition}>
-                    <Popup>
-                        Incidence Location
-                    </Popup>
-                </Marker>
-            )}
+            {incidences
+                .filter((incidence: any) => incidence.coordinates)
+                .map((incidence: any, index) => (
+                    <Marker key={index} position={incidence.coordinates}>
+                        <Popup>
+                            <strong>Incidencia:</strong> {incidence.type}<br />
+                            <strong>Descripción:</strong> {incidence.description}
+                        </Popup>
+                    </Marker>
+                ))}
+
             <Polygon
                 positions={polygonCoords}
                 pathOptions={{ color: 'red', weight: 2, dashArray: '4' }} // Red border with dashed lines
